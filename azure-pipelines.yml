@@ -1,0 +1,86 @@
+trigger:
+- master
+
+# 2016 is used because reboot not necessary after installing clustering feature
+# this seems like a 2019 bug....
+pool:
+  vmImage: 'vs2017-win2016'
+
+variables:
+  solution: '**/*.sln'
+  buildPlatform: 'x64'
+  buildConfiguration: 'Release'
+  GOPATH: 'c:\go_tmp'
+  GOBIN: '$(GOPATH)\bin'
+
+
+steps:
+- checkout: self
+  submodules: recursive
+
+- task: PowerShell@2
+  displayName: "Setup Go environment"
+  inputs:
+    targetType: 'inline'
+    script: '
+      Write-Host "##vso[task.prependpath]$(GOBIN)";
+      mkdir c:\go_tmp;
+      write-host $env:GOBIN $pwd $env:GOPATH $env:GOROOT $env:Path;
+      '
+
+# Go
+# Get, build, or test a Go application, or run a custom Go command
+- task: Go@0
+  displayName: 'go build .\...'
+  inputs:
+    command: 'build' # Options: get, build, test, custom
+    #customCommand: # Required when command == Custom
+    arguments: '.\...' # Optional
+    workingDirectory:
+
+- task: Go@0
+  displayName: 'Install gotestsum'
+  inputs:
+    command: 'get' # Options: get, build, test, custom
+    #customCommand: # Required when command == Custom
+    arguments: 'gotest.tools/gotestsum' # Optional
+    workingDirectory:
+
+- task: PowerShell@2
+  displayName: "Create cluster and and test resource"
+  inputs:
+    targetType: 'inline'
+    script: '
+      write-host $env:GOBIN $pwd $env:GOPATH $env:GOROOT $env:Path;
+      "$(get-date) install clustering";
+      add-windowsfeature Failover-Clustering, RSAT-Clustering-Powershell;
+
+      "$(get-date) create the cluster in an azure friendly, test friendly way";
+      New-Cluster test1 -NoStorage -AdministrativeAccessPoint None -Force ;
+
+      "$(get-date) ensure that cluster is up";
+      get-clustergroup ;
+
+      "$(get-date) add a resource for testing later";
+      Add-ClusterGroup "g1" |Add-ClusterResource "r1" -Type "Generic Application";
+
+      "$(get-date) validation resource is created";
+      get-clusterresource;
+
+      "$(get-date) ensure we have all our files";
+      dir . ;'
+- task:  CmdLine@2
+  displayName: "Run Tests"
+  inputs:
+    script: 'gotestsum --junitfile junit.xml'
+- task: PublishTestResults@2
+  inputs:
+    testResultsFormat: 'JUnit' # Options: JUnit, NUnit, VSTest, xUnit, cTest
+    testResultsFiles: 'junit.xml'
+    #searchFolder: '$(System.DefaultWorkingDirectory)' # Optional
+    #mergeTestResults: false # Optional
+    failTaskOnFailedTests: true # Optional
+    #testRunTitle: # Optional
+    #buildPlatform: # Optional
+    #buildConfiguration: # Optional
+    publishRunAttachments: true # Optional

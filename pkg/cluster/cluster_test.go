@@ -3,13 +3,12 @@ package cluster
 import (
 	"testing"
 
-	"github.com/KnicKnic/go-failovercluster-api/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
 
 const (
 	zeroUintptr      uintptr = 0
-	validClusterName string  = "TestCluster"
+	validClusterName string  = "localhost"
 )
 
 func TestOpenCluster(t *testing.T) {
@@ -20,20 +19,20 @@ func TestOpenCluster(t *testing.T) {
 		t.Log(err.Error())
 	}
 
-	assert.Zero(t, handle, "handle should be null")
-	assert.Equal(t, errors.EPT_S_NOT_REGISTERED, err, "error should not be null")
+	assert.NotZero(t, handle, "handle should not be zero")
+	assert.Nil(t, err, "error should be null")
 }
 
 func TestOpenRemoteCluster(t *testing.T) {
-	handle, err := OpenRemoteCluster(".")
+	handle, err := OpenRemoteCluster(validClusterName)
 	defer handle.Close()
 
 	if err != nil {
 		t.Log(err.Error())
 	}
 
-	assert.Zero(t, handle, "handle should be null")
-	assert.Equal(t, errors.RPC_S_SERVER_UNAVAILABLE, err, "error should not be null")
+	assert.NotZero(t, handle, "handle should not be zero")
+	assert.Nil(t, err, "error should be null")
 }
 func TestOpenRemoteCluster_2(t *testing.T) {
 	handle, err := OpenRemoteCluster(validClusterName)
@@ -42,6 +41,6 @@ func TestOpenRemoteCluster_2(t *testing.T) {
 		t.Log(err.Error())
 	}
 
-	assert.NotZero(t, handle, "handle should be null")
-	assert.Equal(t, nil, err, "error should be null")
+	assert.NotZero(t, handle, "handle should not be zero")
+	assert.Nil(t, err, "error should be null")
 }
