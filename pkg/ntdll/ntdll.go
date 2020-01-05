@@ -8,8 +8,6 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-var _ unsafe.Pointer
-
 // Do the interface allocations only once for common
 
 var (

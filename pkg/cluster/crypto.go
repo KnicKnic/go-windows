@@ -10,8 +10,6 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-var _ unsafe.Pointer
-
 const (
 	PROV_RSA_FULL      CryptographicServiceProviderType = 1
 	PROV_RSA_SIG       CryptographicServiceProviderType = 2

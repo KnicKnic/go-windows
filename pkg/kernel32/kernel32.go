@@ -2,13 +2,10 @@ package kernel32
 
 import (
 	"syscall"
-	"unsafe"
 
 	"github.com/KnicKnic/go-failovercluster-api/pkg/errors"
 	"golang.org/x/sys/windows"
 )
-
-var _ unsafe.Pointer
 
 // Do the interface allocations only once for common
 
