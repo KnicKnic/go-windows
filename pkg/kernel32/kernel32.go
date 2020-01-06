@@ -19,7 +19,7 @@ const (
 	LocalAlloc_LPTR uint32 = 0x40
 )
 
-func LocalAlloc(length uint32) (ptr uintptr, err error) {
+func LocalAlloc(length uint64) (ptr uintptr, err error) {
 	ptr, _, lastError := syscall.Syscall(procLocalAlloc.Addr(), 2, uintptr(LocalAlloc_LPTR), uintptr(length), 0)
 	err = errors.NotNill(ptr, lastError)
 	return

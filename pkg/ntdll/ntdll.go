@@ -35,7 +35,7 @@ func MemcpySrcC(dest []byte, src uintptr, size uint64) {
 
 func MemcpyLocalAlloc(data []byte) (ptr uintptr, err error) {
 
-	size := uint32(len(data))
+	size := uint64(len(data))
 	ptr, err = kernel32.LocalAlloc(size)
 	if err != nil {
 		return
