@@ -5,7 +5,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/KnicKnic/go-failovercluster-api/pkg/memory"
+	"github.com/KnicKnic/go-windows/pkg/util/guid"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -33,7 +33,7 @@ func TestQueryInvalidValue(t *testing.T) {
 	assert.Equal(t, syscall.ERROR_FILE_NOT_FOUND, err)
 
 	myGuidStr := "206994D6-C7B7-ABDB-D89E-AB9CBF3853C4"
-	myGuid, err := memory.GuidFromString(myGuidStr)
+	myGuid, err := guid.FromString(myGuidStr)
 	err = key.SetGuidValue("test_guid_value", myGuid)
 	assert.Nil(t, err)
 

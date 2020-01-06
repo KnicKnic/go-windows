@@ -4,7 +4,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/KnicKnic/go-failovercluster-api/pkg/errors"
+	"github.com/KnicKnic/go-windows/pkg/errors"
 	"golang.org/x/sys/windows"
 )
 

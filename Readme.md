@@ -1,21 +1,15 @@
-[![Build Status](https://dev.azure.com/oneeyedelf1/wasm-imagemagick/_apis/build/status/KnicKnic.go-failovercluster-api?branchName=master)](https://dev.azure.com/oneeyedelf1/wasm-imagemagick/_build/latest?definitionId=4&branchName=master)
+[![Build Status](https://dev.azure.com/oneeyedelf1/powershell.native/_apis/build/status/KnicKnic.go-windows?branchName=master)](https://dev.azure.com/oneeyedelf1/powershell.native/_build/latest?definitionId=5&branchName=master)
 
 # Goal
 
-To create bindings to allow you a go application to call Microsoft Windows Server Failover Cluster Api.
+To create bindings to allow you a go application to call various Microsoft Windows Server Apis.
 
-Currently uses syscall to wrap the c clusapi.dll and resutils.dll code.
-
-## Completed
+## Contents (pkg/...)
 
 Parts of the following cluster api sets
-1. Cluster
-1. Resource
-1. Registry
-1. Crypto
-
-## TODO
-
-* add comments for public functions
-* Write more tests
-* complete more wrappers for functions
+* [Cluster](pkg/cluster/Readme.md)
+    * Microsoft Windows Failover Cluster bindings
+* [kernel32](pkg/kernel32)
+    * LocalAlloc & LocalFree 
+* [ntdll](pkg/ntdll)
+    * memcpy

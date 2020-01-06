@@ -4,8 +4,8 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/KnicKnic/go-failovercluster-api/pkg/errors"
-	"github.com/KnicKnic/go-failovercluster-api/pkg/memory"
+	"github.com/KnicKnic/go-windows/pkg/errors"
+	"github.com/KnicKnic/go-windows/pkg/util/guid"
 	"golang.org/x/sys/windows"
 )
 
@@ -67,7 +67,7 @@ func (handle KeyHandle) SetByteValue(value string, data []byte) error {
 }
 
 // SetGuidValue sets a value on a key
-func (handle KeyHandle) SetGuidValue(value string, guid memory.GUID) error {
+func (handle KeyHandle) SetGuidValue(value string, guid guid.GUID) error {
 	data, err := guid.ToByte()
 	if err != nil {
 		return err
@@ -214,7 +214,7 @@ func (handle KeyHandle) QueryByteValue(valueName string) (data []byte, err error
 }
 
 // QueryGuidValue returns syscall.ERROR_FILE_NOT_FOUND if value does not exist
-func (handle KeyHandle) QueryGuidValue(valueName string) (data memory.GUID, err error) {
+func (handle KeyHandle) QueryGuidValue(valueName string) (data guid.GUID, err error) {
 	dataBuf, err := handle.QueryByteValue(valueName)
 	if err != nil {
 		return
@@ -224,6 +224,6 @@ func (handle KeyHandle) QueryGuidValue(valueName string) (data memory.GUID, err 
 		return
 	}
 
-	data, err = memory.GuidFromBytes(dataBuf)
+	data, err = guid.FromBytes(dataBuf)
 	return
 }

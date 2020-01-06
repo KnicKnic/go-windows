@@ -4,9 +4,9 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/KnicKnic/go-failovercluster-api/pkg/errors"
-	"github.com/KnicKnic/go-failovercluster-api/pkg/kernel32"
-	"github.com/KnicKnic/go-failovercluster-api/pkg/ntdll"
+	"github.com/KnicKnic/go-windows/pkg/errors"
+	"github.com/KnicKnic/go-windows/pkg/kernel32"
+	"github.com/KnicKnic/go-windows/pkg/ntdll"
 	"golang.org/x/sys/windows"
 )
 
