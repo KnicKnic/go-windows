@@ -1,7 +1,9 @@
 package cluster
 
 import (
+	"crypto/rand"
 	"fmt"
+	"reflect"
 	"syscall"
 	"testing"
 
@@ -41,5 +43,288 @@ func TestQueryInvalidValue(t *testing.T) {
 	assert.Nil(t, err)
 
 	err = key.SetValue(myGuidStr, syscall.REG_BINARY, bytes)
+	assert.Nil(t, err)
+}
+
+func TestLoadValues(t *testing.T) {
+	clusterHandle, err := OpenCluster()
+	assert.Nil(t, err)
+	defer clusterHandle.Close()
+
+	// open resource
+	resourceHandle, err := clusterHandle.OpenResource(validResourceName)
+	assert.Nil(t, err)
+	defer resourceHandle.Close()
+
+	// open the root key of the registry
+	rootKeyHandle, err := resourceHandle.GetKey(syscall.KEY_ALL_ACCESS)
+	assert.Nil(t, err)
+	defer rootKeyHandle.Close()
+
+	// Create a test key
+	key, _, err := rootKeyHandle.CreateKey("test", syscall.KEY_ALL_ACCESS)
+	assert.Nil(t, err)
+	defer key.Close()
+
+	// set a random value
+	value := make([]byte, 8)
+	data := make([]byte, 8)
+	rand.Read(value)
+	rand.Read(data)
+	valueString := fmt.Sprintf("%x", value)
+
+	key.SetByteValue(valueString, data)
+
+	// Call Load Values
+	values, err := key.LoadValues()
+	assert.Nil(t, err)
+
+	// check that it is returned
+	if retData, ok := values[valueString]; !ok {
+		t.Errorf("Expected value is not present")
+	} else {
+		if !reflect.DeepEqual(data, retData) {
+			t.Errorf("Loaded value do not match input")
+		}
+	}
+
+	// Delete the value
+	err = key.DeleteValue(valueString)
+	assert.Nil(t, err)
+}
+
+func TestDeleteValues(t *testing.T) {
+	clusterHandle, err := OpenCluster()
+	assert.Nil(t, err)
+	defer clusterHandle.Close()
+
+	// open resource
+	resourceHandle, err := clusterHandle.OpenResource(validResourceName)
+	assert.Nil(t, err)
+	defer resourceHandle.Close()
+
+	// open the root key of the registry
+	rootKeyHandle, err := resourceHandle.GetKey(syscall.KEY_ALL_ACCESS)
+	assert.Nil(t, err)
+	defer rootKeyHandle.Close()
+
+	// Create a test key
+	key, _, err := rootKeyHandle.CreateKey("test", syscall.KEY_ALL_ACCESS)
+	assert.Nil(t, err)
+	defer key.Close()
+
+	// set a random value
+	value := make([]byte, 8)
+	data := make([]byte, 8)
+	rand.Read(value)
+	rand.Read(data)
+	valueString := fmt.Sprintf("%x", value)
+
+	key.SetByteValue(valueString, data)
+
+	// Call Load Values
+	values, err := key.LoadValues()
+	assert.Nil(t, err)
+
+	// check that it is returned
+	if retData, ok := values[valueString]; !ok {
+		t.Errorf("Expected value is not present")
+	} else {
+		if !reflect.DeepEqual(data, retData) {
+			t.Errorf("Loaded value do not match input")
+		}
+	}
+
+	// Delete the value
+	err = key.DeleteValue(valueString)
+	assert.Nil(t, err)
+
+	// check that it is not returned
+	values, err = key.LoadValues()
+	assert.Nil(t, err)
+
+	if _, ok := values[valueString]; ok {
+		t.Errorf("Deleted value is present")
+	}
+}
+
+func TestBatchCommands(t *testing.T) {
+	clusterHandle, err := OpenCluster()
+	assert.Nil(t, err)
+	defer clusterHandle.Close()
+
+	// open resource
+	resourceHandle, err := clusterHandle.OpenResource(validResourceName)
+	assert.Nil(t, err)
+	defer resourceHandle.Close()
+
+	// open the root key of the registry
+	rootKeyHandle, err := resourceHandle.GetKey(syscall.KEY_ALL_ACCESS)
+	assert.Nil(t, err)
+	defer rootKeyHandle.Close()
+
+	// Create a test key
+	key, _, err := rootKeyHandle.CreateKey("test", syscall.KEY_ALL_ACCESS)
+	assert.Nil(t, err)
+	defer key.Close()
+
+	// Create a test key
+	subkey, _, err := key.CreateKey("test-subkey", syscall.KEY_ALL_ACCESS)
+	assert.Nil(t, err)
+	defer key.Close()
+
+	data := make([]byte, 8)
+	rand.Read(data)
+	err = key.SetByteValue("guid", data)
+	assert.Nil(t, err)
+
+	testID := make([]byte, 8)
+	testData := make([]byte, 8)
+	rand.Read(testID)
+	rand.Read(testData)
+	testIDString := fmt.Sprintf("%x", testID)
+
+	batchHandle, err := key.CreateBatch()
+	assert.Nil(t, err)
+
+	err = batchHandle.BatchAddCommand(CLUSREG_CONDITION_IS_EQUAL, "guid", syscall.REG_BINARY, data)
+	assert.Nil(t, err)
+	err = batchHandle.BatchAddCommand(CLUSREG_CREATE_KEY, "test-subkey", 0, nil)
+	assert.Nil(t, err)
+	batchHandle.BatchAddCommand(CLUSREG_SET_VALUE, testIDString, syscall.REG_BINARY, testData)
+	assert.Nil(t, err)
+	_, err = batchHandle.CloseBatch(true)
+	assert.Nil(t, err)
+
+	// Call Load Values
+	values, err := subkey.LoadValues()
+	assert.Nil(t, err)
+
+	// check that it is present and equal to the set value
+	if retData, ok := values[testIDString]; !ok {
+		t.Errorf("Expected value not present")
+	} else {
+		if !reflect.DeepEqual(testData, retData) {
+			t.Errorf("Loaded value does not match input")
+		}
+	}
+
+	// Delete the values created in the test
+	err = subkey.DeleteValue(testIDString)
+	assert.Nil(t, err)
+	err = key.DeleteValue("guid")
+	assert.Nil(t, err)
+}
+
+func TestGuidNotExists(t *testing.T) {
+	clusterHandle, err := OpenCluster()
+	assert.Nil(t, err)
+	defer clusterHandle.Close()
+
+	// open resource
+	resourceHandle, err := clusterHandle.OpenResource(validResourceName)
+	assert.Nil(t, err)
+	defer resourceHandle.Close()
+
+	// open the root key of the registry
+	rootKeyHandle, err := resourceHandle.GetKey(syscall.KEY_ALL_ACCESS)
+	assert.Nil(t, err)
+	defer rootKeyHandle.Close()
+
+	// Create a test key
+	key, _, err := rootKeyHandle.CreateKey("test", syscall.KEY_ALL_ACCESS)
+	assert.Nil(t, err)
+	defer key.Close()
+
+	// Call Load Values
+	values, err := key.LoadValues()
+	assert.Nil(t, err)
+	if _, ok := values["guid"]; ok {
+		err = key.DeleteValue("guid")
+		assert.Nil(t, err)
+	}
+
+	testData := make([]byte, 8)
+	rand.Read(testData)
+
+	batchHandle, err := key.CreateBatch()
+	assert.Nil(t, err)
+	err = batchHandle.BatchAddCommand(CLUSREG_CONDITION_NOT_EXISTS, "guid", 0, nil)
+	assert.Nil(t, err)
+	err = batchHandle.BatchAddCommand(CLUSREG_SET_VALUE, "guid", syscall.REG_BINARY, testData)
+	assert.Nil(t, err)
+	_, err = batchHandle.CloseBatch(true)
+	assert.Nil(t, err)
+
+	// Call Load Values
+	values, err = key.LoadValues()
+	assert.Nil(t, err)
+
+	// check that it is returned
+	if retData, ok := values["guid"]; !ok {
+		t.Errorf("Expected value not present")
+	} else {
+		if !reflect.DeepEqual(testData, retData) {
+			t.Errorf("Loaded value do not match input")
+		}
+	}
+
+	// Delete the value created by the test
+	err = key.DeleteValue("guid")
+	assert.Nil(t, err)
+}
+
+func TestCloseBatchFalse(t *testing.T) {
+	clusterHandle, err := OpenCluster()
+	assert.Nil(t, err)
+	defer clusterHandle.Close()
+
+	// open resource
+	resourceHandle, err := clusterHandle.OpenResource(validResourceName)
+	assert.Nil(t, err)
+	defer resourceHandle.Close()
+
+	// open the root key of the registry
+	rootKeyHandle, err := resourceHandle.GetKey(syscall.KEY_ALL_ACCESS)
+	assert.Nil(t, err)
+	defer rootKeyHandle.Close()
+
+	// Create a test key
+	key, _, err := rootKeyHandle.CreateKey("test", syscall.KEY_ALL_ACCESS)
+	assert.Nil(t, err)
+	defer key.Close()
+
+	data := make([]byte, 8)
+	rand.Read(data)
+	err = key.SetByteValue("guid", data)
+	assert.Nil(t, err)
+
+	testData := make([]byte, 8)
+	rand.Read(testData)
+
+	batchHandle, err := key.CreateBatch()
+	assert.Nil(t, err)
+	err = batchHandle.BatchAddCommand(CLUSREG_CONDITION_IS_EQUAL, "guid", syscall.REG_BINARY, data)
+	assert.Nil(t, err)
+	err = batchHandle.BatchAddCommand(CLUSREG_SET_VALUE, "guid", syscall.REG_BINARY, testData)
+	assert.Nil(t, err)
+	_, err = batchHandle.CloseBatch(false)
+	assert.Nil(t, err)
+
+	// Call Load Values
+	values, err := key.LoadValues()
+	assert.Nil(t, err)
+
+	// check that it is returned
+	if retData, ok := values["guid"]; !ok {
+		t.Errorf("Expected value not present")
+	} else {
+		if !reflect.DeepEqual(data, retData) {
+			t.Errorf("Loaded value do not match input")
+		}
+	}
+
+	// Delete the value
+	err = key.DeleteValue("guid")
 	assert.Nil(t, err)
 }
