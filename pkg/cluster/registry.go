@@ -10,20 +10,41 @@ import (
 )
 
 type (
-	KeyHandle uintptr
+	KeyHandle         uintptr
+	RegBatchHandle    uintptr
+	ClusterRegCommand uint32
 )
 
+// RegistryValue is a struct that contains the byte slice corresponding
+// to a cluster registry value's data and the registry value type of the data
+// The valid DwType options are (REG_*) defined in golang.org/x/sys/windows/types_windows.go
+type RegistryValue struct {
+	Data   []byte
+	DwType uint32
+}
+
 const (
-	REG_CREATED_NEW_KEY uint32 = 0
+	REG_CREATED_NEW_KEY          uint32            = 0
+	ERROR_NO_MORE_ITEMS          syscall.Errno     = 0x103
+	CLUSREG_SET_VALUE            ClusterRegCommand = 1
+	CLUSREG_CREATE_KEY           ClusterRegCommand = 2
+	CLUSREG_DELETE_KEY           ClusterRegCommand = 3
+	CLUSREG_DELETE_VALUE         ClusterRegCommand = 4
+	CLUSREG_CONDITION_NOT_EXISTS ClusterRegCommand = 12
+	CLUSREG_CONDITION_IS_EQUAL   ClusterRegCommand = 13
 )
 
 var (
 	procnativeClusterRegCreateKey = clusapi_dll.NewProc("ClusterRegCreateKey")
 	// procnativeClusterOpenCreateKey  = clusapi_dll.NewProc("ClusterOpenCreateKey")
-	procnativeClusterRegCloseKey   = clusapi_dll.NewProc("ClusterRegCloseKey")
-	procnativeClusterRegSetValue   = clusapi_dll.NewProc("ClusterRegSetValue")
-	procnativeClusterRegEnumValue  = clusapi_dll.NewProc("ClusterRegEnumValue")
-	procnativeClusterRegQueryValue = clusapi_dll.NewProc("ClusterRegQueryValue")
+	procnativeClusterRegCloseKey        = clusapi_dll.NewProc("ClusterRegCloseKey")
+	procnativeClusterRegSetValue        = clusapi_dll.NewProc("ClusterRegSetValue")
+	procnativeClusterRegEnumValue       = clusapi_dll.NewProc("ClusterRegEnumValue")
+	procnativeClusterRegQueryValue      = clusapi_dll.NewProc("ClusterRegQueryValue")
+	procnativeClusterRegDeleteValue     = clusapi_dll.NewProc("ClusterRegDeleteValue")
+	procnativeClusterRegCreateBatch     = clusapi_dll.NewProc("ClusterRegCreateBatch")
+	procnativeClusterRegCloseBatch      = clusapi_dll.NewProc("ClusterRegCloseBatch")
+	procnativeClusterRegBatchAddCommand = clusapi_dll.NewProc("ClusterRegBatchAddCommand")
 )
 
 func closeClusterKey(handle KeyHandle) error {
@@ -152,6 +173,25 @@ func clusterRegEnumValue(handle KeyHandle, index uint32) (keyName string, dwType
 	return
 }
 
+// LoadValues loads the values and data of a key into a map
+func (handle KeyHandle) LoadValues() (map[string]RegistryValue, error) {
+	loaded := make(map[string]RegistryValue)
+	var err error
+
+	for index := uint32(0); err == nil; index++ {
+		id, dwType, data, err := clusterRegEnumValue(handle, index)
+		if err == ERROR_NO_MORE_ITEMS {
+			return loaded, nil
+		}
+		loaded[id] = RegistryValue{
+			Data:   data,
+			DwType: dwType,
+		}
+	}
+
+	return nil, err
+}
+
 // also need to add batches
 // Test if batch returns error when violate a condition
 
@@ -226,4 +266,113 @@ func (handle KeyHandle) QueryGuidValue(valueName string) (data guid.GUID, err er
 
 	data, err = guid.FromBytes(dataBuf)
 	return
+}
+
+func clusterRegDeleteValue(handle KeyHandle, lpszValueName *uint16) error {
+	var r0 uintptr
+	r0, _, _ = syscall.Syscall(procnativeClusterRegDeleteValue.Addr(),
+		2,
+		uintptr(handle),
+		uintptr(unsafe.Pointer(lpszValueName)),
+		0)
+
+	return errors.NotZero(syscall.Errno(r0))
+}
+
+// DeleteValue deletes the value specified by valueName from a key
+func (handle KeyHandle) DeleteValue(valueName string) error {
+	vn, err := windows.UTF16PtrFromString(valueName)
+	if err != nil {
+		return err
+	}
+	return clusterRegDeleteValue(handle, vn)
+}
+
+func clusterRegCreateBatch(handle KeyHandle) (RegBatchHandle, error) {
+	var r0 uintptr
+	var batchHandle uintptr
+	r0, _, _ = syscall.Syscall(procnativeClusterRegCreateBatch.Addr(),
+		2,
+		uintptr(handle),
+		uintptr(unsafe.Pointer(&batchHandle)),
+		0)
+
+	return RegBatchHandle(batchHandle), errors.NotZero(syscall.Errno(r0))
+}
+
+func (handle KeyHandle) CreateBatch() (RegBatchHandle, error) {
+	return clusterRegCreateBatch(handle)
+}
+
+func clusterRegBatchAddCommand(handle RegBatchHandle, command ClusterRegCommand, wzName *uint16, dwType uint32, data []byte) error {
+	var r0 uintptr
+	var dataSize uint32 = uint32(len(data))
+
+	if dataSize == 0 {
+		// use dataSize pointer as address for data because why not it won't be looked at
+		r0, _, _ = syscall.Syscall6(procnativeClusterRegBatchAddCommand.Addr(),
+			6,
+			uintptr(handle),
+			uintptr(uint32(command)),
+			uintptr(unsafe.Pointer(wzName)),
+			uintptr(dwType),
+			uintptr(unsafe.Pointer(&dataSize)),
+			uintptr(dataSize),
+		)
+	} else {
+		r0, _, _ = syscall.Syscall6(procnativeClusterRegBatchAddCommand.Addr(),
+			6,
+			uintptr(handle),
+			uintptr(uint32(command)),
+			uintptr(unsafe.Pointer(wzName)),
+			uintptr(dwType),
+			uintptr(unsafe.Pointer(&data[0])),
+			uintptr(dataSize),
+		)
+	}
+
+	return errors.NotZero(syscall.Errno(r0))
+}
+
+// BatchAddCommand adds a command to a batch
+// If data is non-nil dwType should be one of the standard registry value
+// types (REG_*) defined in golang.org/x/sys/windows/types_windows.go
+func (handle RegBatchHandle) BatchAddCommand(command ClusterRegCommand, value string, dwType uint32, data []byte) error {
+	vn, err := windows.UTF16PtrFromString(value)
+	if err != nil {
+		return err
+	}
+	return clusterRegBatchAddCommand(handle, command, vn, dwType, data)
+}
+
+func clusterRegCloseBatch(handle RegBatchHandle, commit bool) (error, int) {
+	var r0 uintptr
+	var failedCommandNumber uintptr
+	var commitUInt uint = 0
+	if commit {
+		commitUInt = 1
+	}
+
+	r0, _, _ = syscall.Syscall(procnativeClusterRegCloseBatch.Addr(),
+		3,
+		uintptr(handle),
+		uintptr(commitUInt),
+		uintptr(unsafe.Pointer(&failedCommandNumber)))
+
+	err := errors.NotZero(syscall.Errno(r0))
+	if err == nil {
+		// if err is nil, there is no valid value in failedCommandNumber
+		return nil, 0
+	}
+
+	// otherwise, cast to an int, must be signed since failedCommand
+	// can be -1 if the batch execution failed before any operations took place
+	return err, int(failedCommandNumber)
+}
+
+// CloseBatch closes the batch, either executing or discarding it based on the value of commit
+// The second return value is the number of the failed command
+// It should only be used if error is not nil
+func (handle RegBatchHandle) CloseBatch(commit bool) (error, int) {
+	return clusterRegCloseBatch(handle, commit)
 }
